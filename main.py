@@ -2,7 +2,9 @@ import os
 from dotenv import load_dotenv
 import argparse
 from openai import OpenAI
-
+from prompts import system_prompt
+from call_function import available_functions
+import json
 def main():
 
     load_dotenv()
@@ -23,20 +25,30 @@ def main():
     if args.verbose:
        print(f"User prompt:{args.user_prompt}")
     
-    messages = [{"role":"user",  "content": args.user_prompt}]
+    messages = [{"role": "system", "content": system_prompt},
+        {"role":"user",  "content": args.user_prompt}]
     
     response = client.chat.completions.create(
         model="openrouter/free",
         messages= messages ,
+        tools= available_functions,
+        temperature= 0,
     )      
-        
+    message = response.choices[0].message
+    if message.tool_calls:
+        for tool_call in message.tool_calls:
+            function_args = json.loads(tool_call.function.arguments or "{}")
+            print(f"Calling function: {tool_call.function.name}({function_args})")
+
+    else:
+        print(message.content)   
 
    # print(response.usage)
 
     
    
     if response.usage is None:
-         raise RuntimeError("It don't work")
+        raise RuntimeError("It don't work")
     elif args.verbose == True:
         print(f"Prompt tokens: {response.usage.prompt_tokens}")
         print(f"Response tokens: {response.usage.completion_tokens}")
