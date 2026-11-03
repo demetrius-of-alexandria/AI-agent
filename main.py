@@ -6,7 +6,7 @@ from prompts import system_prompt
 from call_function import available_functions
 import json
 from call_function import call_function
-
+import sys
 def main():
     
     load_dotenv()
@@ -19,10 +19,10 @@ def main():
         base_url="https://openrouter.ai/api/v1",
         api_key = api_key,
     )
-    parser = argparse.ArgumentParser(description= "Chatbot") # why does this setup a command line argument parser. Where do these methods come from?
+    parser = argparse.ArgumentParser(description= "Chatbot") 
     parser.add_argument("user_prompt", type=str, help="User prompt")
     parser.add_argument("--verbose", action="store_true", help= "Enable verbose output")
-    args = parser.parse_args()                                    #this is where the name of the parsed arguments is provided
+    args = parser.parse_args()                                    
     
     if args.verbose:
        print(f"User prompt:{args.user_prompt}")
@@ -30,37 +30,39 @@ def main():
     messages = [{"role": "system", "content": system_prompt},
         {"role":"user",  "content": args.user_prompt}]
     
-    response = client.chat.completions.create(
-        model="openrouter/free",
-        messages = messages ,
-        tools= available_functions,
-        temperature= 0,
-    )      
-    message = response.choices[0].message
-    if message.tool_calls:
-        for tool_call in message.tool_calls:
-            result = call_function(tool_call, args.verbose)
-            if result["content"] == False:
-                raise Exception("no content produced")
-            if args.verbose == True:
-                print(f"-> {result['content']}")
+    
+    for _ in range(2):
+        try:
+            response = client.chat.completions.create(
+                model="openrouter/free",
+                messages = messages ,
+                tools= available_functions,
+                temperature= 0,
+            )      
+            message = response.choices[0].message
+            messages.append(message)
+            if not message.tool_calls:
+                print(f"Final Response:{message.content}")
+                return
+            else:
+                
+                for tool_call in message.tool_calls:
+                    result = call_function(tool_call, args.verbose)
+                    messages.append(result)
+                    
+                    if not result["content"] :
+                        raise Exception("no content produced")
+                    if args.verbose == True:
+                        print(f"-> {result['content']}")
+        except Exception as e:
+            print(f"Error{e}")
+            continue
 
-    else:
-        print(message.content)   
-
-   # print(response.usage)
+    print("Max iterations reached")
+    sys.exit(1)
 
     
    
-    if response.usage is None:
-        raise RuntimeError("It don't work")
-    elif args.verbose == True:
-        print(f"Prompt tokens: {response.usage.prompt_tokens}")
-        print(f"Response tokens: {response.usage.completion_tokens}")
-        print (response.choices[0].message.content)
-    else:
-        print(response.choices[0].message.content)
-    
 
 
 
